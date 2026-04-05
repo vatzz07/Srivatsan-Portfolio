@@ -19,7 +19,9 @@ import Lenis from 'lenis';
 function App() {
   const aboutRef = useRef(null);
   const audioRef = useRef(null);
-  const [isMuted, setIsMuted] = useState(false);
+   const [isMuted, setIsMuted] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [isAboutIntersecting, setIsAboutIntersecting] = useState(false);
   const [showAudioButton, setShowAudioButton] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
@@ -31,27 +33,57 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+   // Unlock audio context on first user interaction
   useEffect(() => {
+    const unlock = () => {
+      if (audioUnlocked) return;
+      setAudioUnlocked(true);
+      // Play and immediately pause to "prime" the audio element
+      audioRef.current?.play()
+        .then(() => audioRef.current?.pause())
+        .catch(() => {});
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+    window.addEventListener('click', unlock);
+    window.addEventListener('touchstart', unlock);
+    return () => {
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+  }, [audioUnlocked]);
+
+   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
+          setIsAboutIntersecting(entry.isIntersecting);
           if (entry.isIntersecting) {
-            audioRef.current?.play().catch(e => console.log('Autoplay blocked:', e));
             setShowAudioButton(true);
+            if (audioUnlocked && !isMuted) {
+              audioRef.current?.play().catch(e => console.log('Autoplay blocked:', e));
+            }
           } else {
             audioRef.current?.pause();
             setShowAudioButton(false);
           }
         });
       },
-      { threshold: 0.3 }
+      { threshold: 0.2 }
     );
 
     if (aboutRef.current) {
       observer.observe(aboutRef.current);
     }
     return () => observer.disconnect();
-  }, []);
+  }, [audioUnlocked, isMuted]);
+
+  // Sync play state when audio is unlocked via first click
+  useEffect(() => {
+    if (audioUnlocked && isAboutIntersecting && !isMuted) {
+      audioRef.current?.play().catch(() => {});
+    }
+  }, [audioUnlocked, isAboutIntersecting, isMuted]);
 
   // Global Lenis Smooth Scrolling Engine
   useEffect(() => {
@@ -89,10 +121,16 @@ function App() {
     <>
       <Navbar />
       <TargetCursor spinDuration={2} hideDefaultCursor={false} parallaxOn={true} hoverDuration={0.2} />
-      <audio ref={audioRef} src={tvOffAudio} loop muted={isMuted} />
-      
+      <audio 
+        ref={audioRef} 
+        src={tvOffAudio} 
+        loop 
+        muted={isMuted} 
+        preload="auto"
+      />
+
       {/* Audio Toggle Button */}
-      <button 
+      <button
         onClick={toggleMute}
         style={{
           position: 'fixed',
@@ -174,9 +212,9 @@ function App() {
                 </div>
               </ElectricBorder>
             </div>
-            
+
             <div style={{ flex: '1 1 400px' }}>
-              <ScrollRevealText 
+              <ScrollRevealText
                 text="Full-stack developer for web and app, driving marketing, growth, and everything beyond."
                 style={{
                   color: '#fff',
@@ -230,17 +268,17 @@ function App() {
                     ) : (
                       <img src={proj.image} alt={proj.title} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit', background: '#0a0a0a' }} />
                     )}
-                    <div style={{ 
-                      position: 'absolute', 
-                      bottom: 0, 
-                      width: '100%', 
-                      padding: '1.25rem', 
-                      background: 'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)', 
-                      color: '#fff', 
-                      borderRadius: '0 0 28px 28px' 
+                    <div style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      width: '100%',
+                      padding: '1.25rem',
+                      background: 'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)',
+                      color: '#fff',
+                      borderRadius: '0 0 28px 28px'
                     }}>
-                       <h3 style={{ margin: 0, fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '1.5rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase' }}>{proj.title}</h3>
-                       <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '0.75rem', fontWeight: 800, opacity: 0.6, letterSpacing: '3px', marginTop: '4px', display: 'block' }}>VIEW LIVE SITE ↗</span>
+                      <h3 style={{ margin: 0, fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '1.5rem', fontWeight: 900, letterSpacing: '-0.02em', textTransform: 'uppercase' }}>{proj.title}</h3>
+                      <span style={{ fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '0.75rem', fontWeight: 800, opacity: 0.6, letterSpacing: '3px', marginTop: '4px', display: 'block' }}>VIEW LIVE SITE ↗</span>
                     </div>
                   </a>
                 </ScrollStackItem>
@@ -363,11 +401,11 @@ function App() {
             <a href="https://github.com/vatzz07" target="_blank" rel="noopener noreferrer" className="cursor-target contact-item">
               <FaGithub />
             </a>
-            <button 
+            <button
               className="cursor-target contact-item contact-item-wide"
               onClick={() => setIsContactModalOpen(true)}
             >
-psrivatsan407@gmail.com            </button>
+              psrivatsan407@gmail.com            </button>
           </div>
 
           <style>{`
@@ -447,8 +485,8 @@ psrivatsan407@gmail.com            </button>
           <div style={{ background: '#111', padding: '40px', borderRadius: '24px', width: '90%', maxWidth: '500px', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h2 style={{ margin: 0, color: '#fff', fontFamily: '"Plus Jakarta Sans", sans-serif', fontSize: '1.8rem', fontWeight: 800 }}>Start a Project</h2>
-              <button 
-                onClick={() => setIsContactModalOpen(false)} 
+              <button
+                onClick={() => setIsContactModalOpen(false)}
                 style={{ background: 'rgba(255,255,255,0.1)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', color: '#fff', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
                 &times;
